@@ -50,11 +50,7 @@ app.use(bodyParser.json()); // Parse JSON bodies
 app.use(cookieParser());
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "https://hsonlinebde-learningplatfrom.com",
-      "https://www.hsonlinebde-learningplatfrom.com",
-    ],
+    origin: ["http://localhost:3000", "https://learn77.vercel.app"],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   })
