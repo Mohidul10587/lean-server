@@ -43,7 +43,7 @@ db.once("open", async () => {
   console.log("Connected to MongoDB");
   await seedAdmin();
   await seedSettings();
-  // startSalaryCron();
+  // startSalaryCron();/
 });
 // Middleware
 app.use(bodyParser.json()); // Parse JSON bodies
