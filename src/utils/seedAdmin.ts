@@ -7,10 +7,10 @@ export const seedAdmin = async () => {
     // Seed Super Admin (only one allowed)
     let superAdmin = await User.findOne({ role: "super-admin" });
     if (!superAdmin) {
-      const hashedPassword = await bcrypt.hash("Nadim123@#", 10);
+      const hashedPassword = await bcrypt.hash("+8801700000000", 10);
       superAdmin = await User.create({
         name: "Super Admin",
-        phone: "+8801714651617",
+        phone: "+8801700000000",
         password: hashedPassword,
         role: "super-admin",
         referrer: new mongoose.Types.ObjectId(),

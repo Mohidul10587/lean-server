@@ -12,9 +12,15 @@ declare module "express" {
     user?: IUser;
   }
 }
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
-const JWT_REFRESH_SECRET =
-  process.env.JWT_REFRESH_SECRET || "your-refresh-secret";
+// Fix #8: Fail fast — never fall back to hardcoded secrets
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+
+if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
+  throw new Error(
+    "FATAL: JWT_SECRET and JWT_REFRESH_SECRET must be set in environment variables"
+  );
+}
 
 const getCookieOptions = (req: Request, maxAge?: number) => {
   const origin = req.headers.origin || "";
@@ -30,17 +36,18 @@ const getCookieOptions = (req: Request, maxAge?: number) => {
   };
 };
 
-const generateTokens = (userId: string) => {
+// Fix #6 + #9: include role in payload; access token now 15m instead of 1y
+const generateTokens = (userId: string, role: string) => {
   const accessToken = jwt.sign(
-    { userId },
-    JWT_SECRET,
-    { expiresIn: "1y" } // short lived
+    { userId, role },
+    JWT_SECRET!,
+    { expiresIn: "15m" }
   );
 
   const refreshToken = jwt.sign(
-    { userId },
-    JWT_REFRESH_SECRET,
-    { expiresIn: "10y" } // jwt expiry only
+    { userId, role },
+    JWT_REFRESH_SECRET!,
+    { expiresIn: "10y" }
   );
 
   return { accessToken, refreshToken };
@@ -105,12 +112,12 @@ export const register = async (
       }
     }
 
-    const { accessToken, refreshToken } = generateTokens(user.userId);
+    const { accessToken, refreshToken } = generateTokens(user.userId, user.role);
 
     res.cookie(
       "accessToken",
       accessToken,
-      getCookieOptions(req, 1 * 365 * 24 * 60 * 60 * 1000)
+      getCookieOptions(req, 15 * 60 * 1000) // 15 minutes
     );
     res.cookie(
       "refreshToken",
@@ -197,13 +204,10 @@ export const login = async (
         message: { en: "Invalid password", bn: "ভুল পাসওয়ার্ড" },
       });
 
-    const { accessToken, refreshToken } = generateTokens(user.userId);
+    // Fix #6 + #9: pass role; 15m access token
+    const { accessToken, refreshToken } = generateTokens(user.userId, user.role);
 
-    res.cookie(
-      "accessToken",
-      accessToken,
-      getCookieOptions(req, 1 * 365 * 24 * 60 * 60 * 1000)
-    );
+    res.cookie("accessToken", accessToken, getCookieOptions(req, 15 * 60 * 1000));
     res.cookie(
       "refreshToken",
       refreshToken,
@@ -218,6 +222,7 @@ export const login = async (
     next(err);
   }
 };
+// Fix #7: loginByRole — single aggregate query instead of two separate queries
 const loginByRole = async (
   req: Request,
   res: Response,
@@ -227,31 +232,8 @@ const loginByRole = async (
   try {
     const { phone, password, role } = req.body;
     loginSchema.parse({ phone, password });
-    const rawUser = await User.findOne({ phone });
-    if (!rawUser)
-      return res
-        .status(404)
-        .json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
-    if (!allowedRoles.includes(rawUser.role))
-      return res.status(403).json({
-        message: {
-          en: "Access denied for this login portal",
-          bn: "এই লগইন পোর্টালে প্রবেশাধিকার নেই",
-        },
-      });
-    if (role && rawUser.role !== role)
-      return res.status(403).json({
-        message: {
-          en: "Selected role does not match your account",
-          bn: "নির্বাচিত রোল আপনার অ্যাকাউন্টের সাথে মেলে না",
-        },
-      });
-    const isValid = await bcrypt.compare(password, rawUser.password);
-    if (!isValid)
-      return res
-        .status(401)
-        .json({ message: { en: "Invalid password", bn: "ভুল পাসওয়ার্ড" } });
 
+    // Fix #7: single aggregate instead of findOne + aggregate
     const users = await User.aggregate([
       { $match: { phone } },
       {
@@ -303,9 +285,41 @@ const loginByRole = async (
     ]);
 
     const user = users[0];
-    const { accessToken, refreshToken } = generateTokens(user.userId);
-    res.cookie("accessToken", accessToken, getCookieOptions(req));
-    res.cookie("refreshToken", refreshToken, getCookieOptions(req));
+    if (!user)
+      return res
+        .status(404)
+        .json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
+
+    if (!allowedRoles.includes(user.role))
+      return res.status(403).json({
+        message: {
+          en: "Access denied for this login portal",
+          bn: "এই লগইন পোর্টালে প্রবেশাধিকার নেই",
+        },
+      });
+
+    if (role && user.role !== role)
+      return res.status(403).json({
+        message: {
+          en: "Selected role does not match your account",
+          bn: "নির্বাচিত রোল আপনার অ্যাকাউন্টের সাথে মেলে না",
+        },
+      });
+
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid)
+      return res
+        .status(401)
+        .json({ message: { en: "Invalid password", bn: "ভুল পাসওয়ার্ড" } });
+
+    // Fix #6 + #9: pass role; 15m access token
+    const { accessToken, refreshToken } = generateTokens(user.userId, user.role);
+    res.cookie("accessToken", accessToken, getCookieOptions(req, 15 * 60 * 1000));
+    res.cookie(
+      "refreshToken",
+      refreshToken,
+      getCookieOptions(req, 10 * 365 * 24 * 60 * 60 * 1000)
+    );
     res.json({ message: { en: "Login successful", bn: "লগইন সফল" }, user });
   } catch (err) {
     next(err);
@@ -341,7 +355,7 @@ export const refresh = async (req: Request, res: Response) => {
     const token = req.cookies.refreshToken;
     if (!token) return res.status(401).json({ message: "No refresh token" });
 
-    const decoded = jwt.verify(token, JWT_REFRESH_SECRET) as { userId: string };
+    const decoded = jwt.verify(token, JWT_REFRESH_SECRET!) as { userId: string; role: string };
     const users = await User.aggregate([
       { $match: { userId: decoded.userId } },
       {
@@ -393,18 +407,17 @@ export const refresh = async (req: Request, res: Response) => {
     ]);
 
     const user = users[0];
-    if (!user || user.isActive === false)
+    if (!user || user.isActive !== true)
       return res.status(401).json({ message: "Invalid refresh token" });
 
-    // generate new access token
-    const newAccessToken = jwt.sign({ userId: user.userId }, JWT_SECRET, {
-      expiresIn: "1y",
-    });
+    // Fix #9: new access token also 15m, with role in payload
+    const newAccessToken = jwt.sign(
+      { userId: user.userId, role: user.role },
+      JWT_SECRET!,
+      { expiresIn: "15m" }
+    );
 
-    // set cookie
-    res.cookie("accessToken", newAccessToken, getCookieOptions(req));
-
-    // ✅ return user data directly
+    res.cookie("accessToken", newAccessToken, getCookieOptions(req, 15 * 60 * 1000));
     res.json({ success: true, user });
   } catch {
     res.status(401).json({ message: "Refresh failed" });
@@ -1216,26 +1229,38 @@ export async function activateAccount(
   res: Response,
   next: NextFunction
 ) {
+  // Fix #10: wrap everything in a MongoDB transaction — if any step fails,
+  // the fee deduction and all commission credits are rolled back atomically.
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const userId = req.user?._id;
-    const user = await User.findById(userId).populate([
-      { path: "referrer", select: "_id name userId" },
-    ]);
+    const user = await User.findById(userId)
+      .populate([{ path: "referrer", select: "_id name userId" }])
+      .session(session);
 
-    if (!user)
+    if (!user) {
+      await session.abortTransaction();
+      session.endSession();
       return res
         .status(404)
         .json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
+    }
 
-    if (user.isActive)
+    if (user.isActive) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         message: {
           en: "Account already active",
           bn: "অ্যাকাউন্ট ইতিমধ্যে সক্রিয়",
         },
       });
+    }
 
-    const settings = await Settings.findOne();
+    // Fix #13: fetch settings once and reuse
+    const settings = await Settings.findOne().session(session);
     const admissionFee = settings?.admissionFee || 0;
     const commission = settings?.activationCommission || {
       referrer: 0,
@@ -1249,124 +1274,174 @@ export async function activateAccount(
     if (!user.teamLeader && settings?.defaultTeamLeaderId) {
       const defaultTL = await User.findOne({
         userId: settings.defaultTeamLeaderId,
-      });
+      }).session(session);
       if (defaultTL) {
         user.teamLeader = defaultTL._id as any;
       }
     }
 
-    let wallet = await Wallet.findOne({ userId });
-    if (!wallet)
+    const wallet = await Wallet.findOne({ userId }).session(session);
+    if (!wallet) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         message: { en: "Insufficient balance", bn: "অপর্যাপ্ত ব্যালেন্স" },
       });
+    }
 
-    if (wallet.earnedBalance < admissionFee)
+    if (wallet.earnedBalance < admissionFee) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         message: { en: "Insufficient balance", bn: "অপর্যাপ্ত ব্যালেন্স" },
       });
+    }
 
+    // --- Deduct admission fee ---
     const previousBalance = wallet.earnedBalance;
     wallet.earnedBalance -= admissionFee;
-    await wallet.save();
+    await wallet.save({ session });
 
-    await Transaction.create({
-      userId,
-      previousAmount: previousBalance,
-      recentAmount: -admissionFee,
-      currentTotal: wallet.earnedBalance,
-      description: `Account Activation Fee Deducted`,
-      type: "debit",
-    });
+    await Transaction.create(
+      [
+        {
+          userId,
+          previousAmount: previousBalance,
+          recentAmount: -admissionFee,
+          currentTotal: wallet.earnedBalance,
+          description: `Account Activation Fee Deducted`,
+          type: "debit",
+        },
+      ],
+      { session }
+    );
 
-    // Distribute commissions up the chain: referrer → referrer's trainer → trainer's teamLeader → teamLeader's seniorTeamLeader
+    // --- Distribute commissions ---
+    // Fix #1 (N+1): fetch referrer doc + all commission wallets in parallel
     const referrer = user.referrer as any;
+
     if (referrer?._id) {
-      const referrerDoc = await User.findById(referrer._id).populate([
-        { path: "trainer", select: "_id name userId" },
-        { path: "teamLeader", select: "_id name userId" },
-        { path: "seniorTeamLeader", select: "_id name userId" },
+      const [referrerDoc, refWallet] = await Promise.all([
+        User.findById(referrer._id)
+          .populate([
+            { path: "trainer", select: "_id name userId" },
+            { path: "teamLeader", select: "_id name userId" },
+            { path: "seniorTeamLeader", select: "_id name userId" },
+          ])
+          .session(session),
+        commission.referrer > 0
+          ? Wallet.findOne({ userId: referrer._id }).session(session)
+          : Promise.resolve(null),
+      ]);
+
+      const trainerDoc = (referrerDoc?.trainer as any)?._id
+        ? (referrerDoc?.trainer as any)
+        : null;
+      const teamLeaderDoc = (referrerDoc?.teamLeader as any)?._id
+        ? (referrerDoc?.teamLeader as any)
+        : null;
+
+      // Fetch commission wallets in parallel
+      const [trainerWallet, tlWallet] = await Promise.all([
+        trainerDoc?._id && commission.trainer > 0
+          ? Wallet.findOne({ userId: trainerDoc._id }).session(session)
+          : Promise.resolve(null),
+        teamLeaderDoc?._id && commission.teamLeader > 0
+          ? Wallet.findOne({ userId: teamLeaderDoc._id }).session(session)
+          : Promise.resolve(null),
       ]);
 
       // 1. Referrer commission
-      if (commission.referrer > 0) {
-        const refWallet = await Wallet.findOne({ userId: referrer._id });
-        if (refWallet) {
-          const prevBal = refWallet.earnedBalance;
-          refWallet.earnedBalance += commission.referrer;
-          await refWallet.save();
-          await Transaction.create({
-            userId: referrer._id,
-            previousAmount: prevBal,
-            recentAmount: commission.referrer,
-            currentTotal: refWallet.earnedBalance,
-            description: `You got ${commission.referrer} Tk as Referral Commission from ${user.name} (${user.userId}) Activation`,
-            type: "credit",
-          });
-        }
+      if (refWallet && commission.referrer > 0) {
+        const prevBal = refWallet.earnedBalance;
+        refWallet.earnedBalance += commission.referrer;
+        await refWallet.save({ session });
+        await Transaction.create(
+          [
+            {
+              userId: referrer._id,
+              previousAmount: prevBal,
+              recentAmount: commission.referrer,
+              currentTotal: refWallet.earnedBalance,
+              description: `You got ${commission.referrer} Tk as Referral Commission from ${user.name} (${user.userId}) Activation`,
+              type: "credit",
+            },
+          ],
+          { session }
+        );
       }
 
       // 2. Referrer's trainer commission
-      const trainerDoc = referrerDoc?.trainer as any;
-      if (trainerDoc?._id && commission.trainer > 0) {
-        const trainerWallet = await Wallet.findOne({ userId: trainerDoc._id });
-        if (trainerWallet) {
-          const prevBal = trainerWallet.earnedBalance;
-          trainerWallet.earnedBalance += commission.trainer;
-          await trainerWallet.save();
-          await Transaction.create({
-            userId: trainerDoc._id,
-            previousAmount: prevBal,
-            recentAmount: commission.trainer,
-            currentTotal: trainerWallet.earnedBalance,
-            description: `Trainer Commission from ${user.name} (${user.userId}) Activation`,
-            type: "credit",
-          });
-        }
+      if (trainerWallet && commission.trainer > 0) {
+        const prevBal = trainerWallet.earnedBalance;
+        trainerWallet.earnedBalance += commission.trainer;
+        await trainerWallet.save({ session });
+        await Transaction.create(
+          [
+            {
+              userId: trainerDoc._id,
+              previousAmount: prevBal,
+              recentAmount: commission.trainer,
+              currentTotal: trainerWallet.earnedBalance,
+              description: `Trainer Commission from ${user.name} (${user.userId}) Activation`,
+              type: "credit",
+            },
+          ],
+          { session }
+        );
       }
 
       // 3. Referrer's team leader commission
-      const teamLeaderDoc = referrerDoc?.teamLeader as any;
-      if (teamLeaderDoc?._id && commission.teamLeader > 0) {
-        const tlWallet = await Wallet.findOne({ userId: teamLeaderDoc._id });
-        if (tlWallet) {
-          const prevBal = tlWallet.earnedBalance;
-          tlWallet.earnedBalance += commission.teamLeader;
-          await tlWallet.save();
-          await Transaction.create({
-            userId: teamLeaderDoc._id,
-            previousAmount: prevBal,
-            recentAmount: commission.teamLeader,
-            currentTotal: tlWallet.earnedBalance,
-            description: `Team Leader Commission from ${user.name} (${user.userId}) Activation - Student referred by ${referrer.userId}`,
-            type: "credit",
-          });
-        }
+      if (tlWallet && commission.teamLeader > 0) {
+        const prevBal = tlWallet.earnedBalance;
+        tlWallet.earnedBalance += commission.teamLeader;
+        await tlWallet.save({ session });
+        await Transaction.create(
+          [
+            {
+              userId: teamLeaderDoc._id,
+              previousAmount: prevBal,
+              recentAmount: commission.teamLeader,
+              currentTotal: tlWallet.earnedBalance,
+              description: `Team Leader Commission from ${user.name} (${user.userId}) Activation - Student referred by ${referrer.userId}`,
+              type: "credit",
+            },
+          ],
+          { session }
+        );
       }
     }
 
-    // 5. Councilor commission
+    // 4. Councilor commission
     const councilor = user.councilor as any;
     if (councilor && commission.councilor > 0) {
-      const cWallet = await Wallet.findOne({ userId: councilor });
+      const cWallet = await Wallet.findOne({ userId: councilor }).session(session);
       if (cWallet) {
         const prevBal = cWallet.earnedBalance;
         cWallet.earnedBalance += commission.councilor;
-        await cWallet.save();
-        await Transaction.create({
-          userId: councilor,
-          previousAmount: prevBal,
-          recentAmount: commission.councilor,
-          currentTotal: cWallet.earnedBalance,
-          description: `Councilor Commission from ${user.name} (${user.userId}) Activation`,
-          type: "credit",
-        });
+        await cWallet.save({ session });
+        await Transaction.create(
+          [
+            {
+              userId: councilor,
+              previousAmount: prevBal,
+              recentAmount: commission.councilor,
+              currentTotal: cWallet.earnedBalance,
+              description: `Councilor Commission from ${user.name} (${user.userId}) Activation`,
+              type: "credit",
+            },
+          ],
+          { session }
+        );
       }
     }
 
     user.isActive = true;
     user.activationDate = new Date();
-    await user.save();
+    await user.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.json({
       message: {
@@ -1375,6 +1450,8 @@ export async function activateAccount(
       },
     });
   } catch (error: any) {
+    await session.abortTransaction();
+    session.endSession();
     next(error);
   }
 }
