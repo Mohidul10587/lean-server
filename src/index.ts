@@ -1,5 +1,7 @@
-import express, { Express, Request, Response } from "express";
 import dotenv from "dotenv";
+dotenv.config();
+
+import express, { Express, Request, Response } from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import bodyParser from "body-parser";
@@ -31,8 +33,6 @@ import orderSuperAdminRoutes from "./app/order/super-admin-routes";
 import withdrawSuperAdminRoutes from "./app/withdraw/super-admin-routes";
 import walletSuperAdminRoutes from "./app/wallet/super-admin-routes";
 import statsSuperAdminRoutes from "./app/stats/super-admin-routes";
-
-dotenv.config();
 
 // Fix #8 / #14: validate required env vars at startup — fail fast
 const REQUIRED_ENV = ["MONGODB_URI", "JWT_SECRET", "JWT_REFRESH_SECRET"];
