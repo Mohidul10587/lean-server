@@ -19,21 +19,6 @@ export const seedAdmin = async () => {
       // Self-referential: referrer points to itself
       await User.findByIdAndUpdate(superAdmin._id, { referrer: superAdmin._id });
     }
-
-    // Seed Admin (only one allowed)
-    const adminExists = await User.findOne({ role: "admin" });
-    if (!adminExists) {
-      const hashedPassword = await bcrypt.hash("Nadim@123", 10);
-      const admin = await User.create({
-        name: "Admin",
-        phone: "+8801722790326",
-        password: hashedPassword,
-        role: "admin",
-        referrer: superAdmin._id,
-        isActive: true,
-      });
-      await User.findByIdAndUpdate(admin._id, { referrer: superAdmin._id });
-    }
   } catch (error) {
     console.error("❌ Error seeding admin:", error);
   }

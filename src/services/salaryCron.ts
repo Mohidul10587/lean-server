@@ -6,7 +6,7 @@ import { Transaction } from "../app/transaction/model";
 import { Settings } from "../app/settings/model";
 
 const SALARY_ROLES = [
-  "admin", "auditor", "checker", "controller", "councilor",
+  "auditor", "checker", "controller", "councilor",
   "super-admin", "lead-checker", "teacher", "accountant",
 ];
 

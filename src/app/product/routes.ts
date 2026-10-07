@@ -9,7 +9,7 @@ import {
   getAllSlugs,
   getAffiliateProducts,
 } from "./controller";
-import { verifyAdmin, verifyUser } from "../../middleware/auth";
+import { verifySuperAdmin, verifyUser } from "../../middleware/auth";
 import { allForUserIndex, getProductTypes } from "./filter";
 
 const router = Router();
@@ -21,11 +21,11 @@ router.get("/shop/slugs", getAllSlugs);
 router.get("/affiliate", verifyUser, getAffiliateProducts);
 router.get("/shop/:slug", forUserDetails);
 
-//====================== For Admin =====================
-router.post("/create", verifyAdmin, create);
-router.get("/allForAdminIndex", verifyAdmin, allForAdminIndex);
-router.get("/singleForEdit/:id", verifyAdmin, singleForEdit);
-router.put("/update/:id", verifyAdmin, update);
-router.delete("/delete/:id", verifyAdmin, deleteById);
+//====================== For Super Admin =====================
+router.post("/create", verifySuperAdmin, create);
+router.get("/allForAdminIndex", verifySuperAdmin, allForAdminIndex);
+router.get("/singleForEdit/:id", verifySuperAdmin, singleForEdit);
+router.put("/update/:id", verifySuperAdmin, update);
+router.delete("/delete/:id", verifySuperAdmin, deleteById);
 
 export default router;

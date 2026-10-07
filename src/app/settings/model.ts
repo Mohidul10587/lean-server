@@ -31,6 +31,7 @@ export interface ISettings extends Document {
   teamLeaderMinBalance: number;
   activationCommission: {
     referrer: number;
+    referrerOfReferrer: number;
     trainer: number;
     teamLeader: number;
     seniorTeamLeader: number;
@@ -71,6 +72,8 @@ export interface ISettings extends Document {
     teacher: number;
     accountant: number;
   };
+  imageOfEarningRules: string;
+  quizRules: string;
 }
 
 const settingsSchema = new Schema<ISettings>(
@@ -85,6 +88,7 @@ const settingsSchema = new Schema<ISettings>(
     teamLeaderMinBalance: { type: Number, default: 0 },
     activationCommission: {
       referrer: { type: Number, default: 0 },
+      referrerOfReferrer: { type: Number, default: 0 },
       trainer: { type: Number, default: 0 },
       teamLeader: { type: Number, default: 0 },
       seniorTeamLeader: { type: Number, default: 0 },
@@ -168,6 +172,8 @@ const settingsSchema = new Schema<ISettings>(
       teacher: { type: Number, default: 0 },
       accountant: { type: Number, default: 0 },
     },
+    imageOfEarningRules: { type: String, default: "" },
+    quizRules: { type: String, default: "" },
   },
   { timestamps: true }
 );

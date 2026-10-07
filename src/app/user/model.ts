@@ -18,7 +18,6 @@ export interface IUser extends Document {
   seniorTeamLeader: ObjectId;
   role:
     | "accountant"
-    | "admin"
     | "auditor"
     | "checker"
     | "controller"
@@ -70,7 +69,6 @@ const UserSchema = new Schema<IUser>(
       type: String,
       enum: [
         "accountant",
-        "admin",
         "auditor",
         "checker",
         "controller",
@@ -114,8 +112,7 @@ UserSchema.pre("save", async function (next) {
       { $inc: { seq: 1 } },
       { new: true, upsert: true }
     );
-    const year = new Date().getFullYear().toString().slice(-2);
-    this.userId = `HS${year}${counter.seq}`;
+    this.userId = `HAM${counter.seq}`;
   }
   next();
 });

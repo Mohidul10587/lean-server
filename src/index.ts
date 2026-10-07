@@ -33,6 +33,12 @@ import orderSuperAdminRoutes from "./app/order/super-admin-routes";
 import withdrawSuperAdminRoutes from "./app/withdraw/super-admin-routes";
 import walletSuperAdminRoutes from "./app/wallet/super-admin-routes";
 import statsSuperAdminRoutes from "./app/stats/super-admin-routes";
+import reviewRoutes from "./app/review/routes";
+import reviewSuperAdminRoutes from "./app/review/super-admin-routes";
+import dailyTaskRoutes from "./app/daily-task/routes";
+import videoTaskRoutes from "./app/video-task/routes";
+import imageOfEarningRoutes from "./app/image-of-earning/routes";
+import quizRoutes from "./app/quiz/routes";
 
 // Fix #8 / #14: validate required env vars at startup — fail fast
 const REQUIRED_ENV = ["MONGODB_URI", "JWT_SECRET", "JWT_REFRESH_SECRET"];
@@ -77,6 +83,11 @@ app.use("/cart", cartRoutes);
 app.use("/order", orderRoutes);
 app.use("/upload-video", uploadVideoRoutes);
 app.use("/upload-image", uploadImageRoutes);
+app.use("/review", reviewRoutes);
+app.use("/daily-task", dailyTaskRoutes);
+app.use("/video-task", videoTaskRoutes);
+app.use("/image-of-earning", imageOfEarningRoutes);
+app.use("/quiz", quizRoutes);
 
 // Super Admin Routes
 app.use("/super-admin/user", userSuperAdminRoutes);
@@ -86,6 +97,7 @@ app.use("/super-admin/order", orderSuperAdminRoutes);
 app.use("/super-admin/withdraw", withdrawSuperAdminRoutes);
 app.use("/super-admin/wallet", walletSuperAdminRoutes);
 app.use("/super-admin/stats", statsSuperAdminRoutes);
+app.use("/super-admin/review", reviewSuperAdminRoutes);
 
 app.use(errorHandler);
 

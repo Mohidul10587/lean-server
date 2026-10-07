@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { verifyUser, verifyAdmin } from "../../middleware/auth";
+import { verifyUser, verifySuperAdmin } from "../../middleware/auth";
 import {
   createOrder,
   getMyOrders,
@@ -13,7 +13,7 @@ const router = Router();
 router.post("/create", createOrder);
 router.post("/create-direct", createDirectOrder);
 router.get("/my-orders", verifyUser, getMyOrders);
-router.get("/all", verifyAdmin, getAllOrders);
-router.patch("/:orderId/status", verifyAdmin, updateOrderStatus);
+router.get("/all", verifySuperAdmin, getAllOrders);
+router.patch("/:orderId/status", verifySuperAdmin, updateOrderStatus);
 
 export default router;

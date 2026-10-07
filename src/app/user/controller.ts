@@ -329,9 +329,6 @@ const loginByRole = async (
 export const loginStudent = (req: Request, res: Response, next: NextFunction) =>
   loginByRole(req, res, next, ["student"]);
 
-export const loginAdmin = (req: Request, res: Response, next: NextFunction) =>
-  loginByRole(req, res, next, ["admin"]);
-
 export const loginSuperAdmin = (
   req: Request,
   res: Response,
@@ -963,26 +960,6 @@ export const updatePasswordByAdmin = async (
       });
     }
 
-    if (requester.role === "admin") {
-      if ((requester._id as any).toString() === id) {
-        return res.status(403).json({
-          message: {
-            en: "Admin cannot change their own password",
-            bn: "অ্যাডমিন নিজের পাসওয়ার্ড পরিবর্তন করতে পারবেন না",
-          },
-        });
-      }
-      const target = await User.findById(id).select("role");
-      if (target?.role === "super-admin" || target?.role === "admin") {
-        return res.status(403).json({
-          message: {
-            en: "Admin cannot change Super Admin's and his own password",
-            bn: "অ্যাডমিন সুপার অ্যাডমিনের পাসওয়ার্ড পরিবর্তন করতে পারবেন না",
-          },
-        });
-      }
-    }
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.findByIdAndUpdate(
       id,
@@ -1099,7 +1076,6 @@ export const updateUserRole = async (
       "trainer",
       "team-leader",
       "senior-team-leader",
-      "admin",
     ];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
@@ -1149,14 +1125,6 @@ export const changePassword = async (
     if (!user)
       return res.status(404).json({
         message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" },
-      });
-
-    if (user.role === "admin")
-      return res.status(403).json({
-        message: {
-          en: "Admin cannot change their own password",
-          bn: "অ্যাডমিন নিজের পাসওয়ার্ড পরিবর্তন করতে পারবেন না",
-        },
       });
 
     const isValid = await bcrypt.compare(currentPassword, user.password);
@@ -1264,6 +1232,7 @@ export async function activateAccount(
     const admissionFee = settings?.admissionFee || 0;
     const commission = settings?.activationCommission || {
       referrer: 0,
+      referrerOfReferrer: 0,
       trainer: 0,
       teamLeader: 0,
       seniorTeamLeader: 0,
@@ -1324,6 +1293,7 @@ export async function activateAccount(
       const [referrerDoc, refWallet] = await Promise.all([
         User.findById(referrer._id)
           .populate([
+            { path: "referrer", select: "_id name userId" },
             { path: "trainer", select: "_id name userId" },
             { path: "teamLeader", select: "_id name userId" },
             { path: "seniorTeamLeader", select: "_id name userId" },
@@ -1409,6 +1379,43 @@ export async function activateAccount(
           ],
           { session }
         );
+      }
+
+      // 4. Referrer-of-referrer commission (X gets commission when Z activates via Y)
+      // Chain: X → Y → Z (Z activates, Y is referrer, X is Y's referrer)
+      if (commission.referrerOfReferrer > 0 && referrerDoc?.referrer) {
+        const referrerOfReferrerId = (referrerDoc.referrer as any)?._id
+          ?? referrerDoc.referrer;
+
+        // Don't pay if X === Y (self-referral loop at top level)
+        const isSelfLoop =
+          referrerOfReferrerId?.toString() === referrer._id?.toString();
+
+        if (!isSelfLoop) {
+          // upsert: create wallet if X has none
+          const rorWallet = await Wallet.findOneAndUpdate(
+            { userId: referrerOfReferrerId },
+            { $setOnInsert: { userId: referrerOfReferrerId, earnedBalance: 0 } },
+            { upsert: true, new: true, session }
+          );
+
+          const prevBal = rorWallet.earnedBalance;
+          rorWallet.earnedBalance += commission.referrerOfReferrer;
+          await rorWallet.save({ session });
+          await Transaction.create(
+            [
+              {
+                userId: referrerOfReferrerId,
+                previousAmount: prevBal,
+                recentAmount: commission.referrerOfReferrer,
+                currentTotal: rorWallet.earnedBalance,
+                description: `2nd Level Referral Commission from ${user.name} (${user.userId}) Activation - via ${referrer.userId}`,
+                type: "credit",
+              },
+            ],
+            { session }
+          );
+        }
       }
     }
 

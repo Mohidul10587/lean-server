@@ -3,7 +3,6 @@ import {
   register,
   login,
   loginStudent,
-  loginAdmin,
   loginSuperAdmin,
   loginOthers,
   verify,
@@ -53,8 +52,7 @@ import {
 } from "./controller";
 import {
   verifyUser,
-  verifyAdmin,
-  verifyAdminOrSuperAdmin,
+  verifySuperAdmin,
   verifyUserInactive,
 } from "../../middleware/auth";
 import { getUsersAll } from "./filter/getUsersAll";
@@ -67,51 +65,50 @@ const router = Router();
 router.post("/register", register);
 router.post("/login", login);
 router.post("/login/student", loginStudent);
-router.post("/login/admin", loginAdmin);
 router.post("/login/super-admin", loginSuperAdmin);
 router.post("/login/others", loginOthers);
 router.get("/verify", verify);
 router.post("/refresh", refresh);
 router.post("/logout", logout);
-router.get("/list", verifyAdminOrSuperAdmin, getUsersAll);
-router.get("/filter", verifyAdminOrSuperAdmin, filterUsers);
-router.get("/by-role", verifyAdminOrSuperAdmin, getUsersByRole);
+router.get("/list", verifySuperAdmin, getUsersAll);
+router.get("/filter", verifySuperAdmin, filterUsers);
+router.get("/by-role", verifySuperAdmin, getUsersByRole);
 
 router.get("/teachers", verifyUser, getTeachers);
-router.get("/specialUsers", verifyAdminOrSuperAdmin, specialUsers);
+router.get("/specialUsers", verifySuperAdmin, specialUsers);
 
 router.get(
   "/getUserByIdForAdmin/:id",
-  verifyAdminOrSuperAdmin,
+  verifySuperAdmin,
   getUserByIdForAdmin
 );
 
 router.put("/update", verifyUser, updateProfile);
-router.put("/update-role", verifyAdminOrSuperAdmin, updateUserRole);
+router.put("/update-role", verifySuperAdmin, updateUserRole);
 router.put(
   "/updateUserByIdByAdmin/:id",
-  verifyAdminOrSuperAdmin,
+  verifySuperAdmin,
   updateUserByIdByAdmin
 );
 router.patch(
   "/toggleUserStatus/:id",
-  verifyAdminOrSuperAdmin,
+  verifySuperAdmin,
   toggleUserStatus
 );
 router.put(
   "/updatePasswordByAdmin/:id",
-  verifyAdminOrSuperAdmin,
+  verifySuperAdmin,
   updatePasswordByAdmin
 );
-router.put("/updateSalary/:id", verifyAdminOrSuperAdmin, updateUserByIdByAdmin);
+router.put("/updateSalary/:id", verifySuperAdmin, updateUserByIdByAdmin);
 router.delete(
   "/deleteUserByIdByAdmin/:id",
-  verifyAdminOrSuperAdmin,
+  verifySuperAdmin,
   deleteUserByIdByAdmin
 );
-router.get("/team-leaders", verifyAdminOrSuperAdmin, getAllTeamLeaders);
-router.get("/orphaned-users", verifyAdminOrSuperAdmin, getOrphanedUsersByTeamLeader);
-router.post("/bulk-reassign-tl", verifyAdminOrSuperAdmin, bulkReassignTeamLeader);
+router.get("/team-leaders", verifySuperAdmin, getAllTeamLeaders);
+router.get("/orphaned-users", verifySuperAdmin, getOrphanedUsersByTeamLeader);
+router.post("/bulk-reassign-tl", verifySuperAdmin, bulkReassignTeamLeader);
 router.put("/change-password", verifyUser, changePassword);
 router.put("/update-settings", verifyUser, updateSettings);
 router.post("/activate-account", verifyUserInactive, activateAccount);

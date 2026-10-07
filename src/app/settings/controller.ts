@@ -102,6 +102,12 @@ export const updateSettings = async (
       if (req.body.banners !== undefined) {
         settings.banners = req.body.banners;
       }
+      if (req.body.imageOfEarningRules !== undefined) {
+        settings.imageOfEarningRules = req.body.imageOfEarningRules;
+      }
+      if (req.body.quizRules !== undefined) {
+        settings.quizRules = req.body.quizRules;
+      }
 
       await settings.save();
     }

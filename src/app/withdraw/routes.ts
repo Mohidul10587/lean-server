@@ -6,21 +6,15 @@ import {
   updateStatus,
 } from "./withdraw.controller";
 import {
-  verifyAdmin,
-  verifyAdminOrSuperAdmin,
+  verifySuperAdmin,
   verifyUser,
 } from "../../middleware/auth";
 
 const router = express.Router();
 
-// Routes
-router.post("/createWithdrawRequest", verifyUser, createWithdrawRequest); // Create a transaction
-router.get(
-  "/getWithdrawRequestsForAdmin",
-  verifyAdmin,
-  getWithdrawRequestsForAdmin
-);
+router.post("/createWithdrawRequest", verifyUser, createWithdrawRequest);
+router.get("/getWithdrawRequestsForAdmin", verifySuperAdmin, getWithdrawRequestsForAdmin);
 router.get("/my-withdrawals", verifyUser, getMyWithdrawals);
-// Route to update withdrawal status
-router.put("/updateStatus/:withdrawId", verifyAdminOrSuperAdmin, updateStatus);
+router.put("/updateStatus/:withdrawId", verifySuperAdmin, updateStatus);
+
 export default router;
